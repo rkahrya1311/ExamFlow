@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — ExamFlow{% endblock %}
+{% block page_title %}Examination Dashboard{% endblock %}
+{% block page_subtitle %}Real-time campus examination capacity and allocation overview{% endblock %}
+
+{% block topbar_actions %}
+  <form action="{{ url_for('reset_and_seed') }}" method="POST" style="display: inline;">
+    <button type="submit" class="btn btn-secondary btn-sm" title="Reset and populate balanced demo data">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      Seed Demo Data
+    </button>
+  </form>
+  <a href="{{ url_for('examinations_list') }}" class="btn btn-primary btn-sm">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+    </svg>
+    New Examination
+  </a>
+{% endblock %}
+
+{% block content %}
+<!-- Metric Cards -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div>
+      <div class="stat-label">Registered Students</div>
+      <div class="stat-value">{{ student_count }}</div>
+      <div class="stat-desc">Across {{ dept_summary|length }} departments</div>
+    </div>
+    <div class="stat-icon indigo">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div>
+      <div class="stat-label">Available Classrooms</div>
+      <div class="stat-value">{{ classroom_count }}</div>
+      <div class="stat-desc">{{ total_capacity // 2 }} total benches</div>
+    </div>
+    <div class="stat-icon emerald">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div>
+      <div class="stat-label">Total Student Capacity</div>
+      <div class="stat-value">{{ total_capacity }}</div>
+      <div class="stat-desc">2 seats per bench (Left & Right)</div>
+    </div>
+    <div class="stat-icon blue">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div>
+      <div class="stat-label">Examinations Scheduled</div>
+      <div class="stat-value">{{ exam_count }}</div>
+      <div class="stat-desc">Active examination plans</div>
+    </div>
+    <div class="stat-icon amber">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- Department Distribution -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Registered Department Distribution</h3>
+      <p class="card-subtitle">Active student cohorts eligible for examination pairing</p>
+    </div>
+    <a href="{{ url_for('students_list') }}" class="btn btn-secondary btn-sm">Manage Directory</a>
+  </div>
+  <div class="card-body">
+    {% if dept_summary %}
+      <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+        {% for d in dept_summary %}
+          <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px 18px; display: flex; align-items: center; gap: 12px;">
+            <span class="badge badge-dept" style="font-size: 14px; padding: 4px 10px;">{{ d.department }}</span>
+            <span style="font-size: 18px; font-weight: 700; color: var(--text-primary);">{{ d.count }}</span>
+            <span style="font-size: 12px; color: var(--text-muted);">students</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p style="color: var(--text-secondary);">No student records found. Upload a student CSV to begin.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Recent Examinations -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Scheduled Examinations</h3>
+      <p class="card-subtitle">Select an exam to configure allocations, preview seating grids, or export PDFs</p>
+    </div>
+    <a href="{{ url_for('examinations_list') }}" class="btn btn-primary btn-sm">View All</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Exam Title & Code</th>
+          <th>Date & Session</th>
+          <th>Participating Depts</th>
+          <th>Status</th>
+          <th>Seated / Capacity</th>
+          <th style="text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if exams %}
+          {% for ex in exams %}
+            <tr>
+              <td>
+                <div style="font-weight: 700; color: var(--text-primary);">{{ ex.title }}</div>
+                <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;">{{ ex.exam_code }}</div>
+              </td>
+              <td>
+                <div>{{ ex.date }}</div>
+                <div style="font-size: 12px; color: var(--text-muted);">{{ ex.session_time }}</div>
+              </td>
+              <td>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                  {% for dept in ex.departments %}
+                    <span class="badge badge-dept">{{ dept }}</span>
+                  {% endfor %}
+                </div>
+              </td>
+              <td>
+                {% if ex.status == 'ALLOCATED' %}
+                  <span class="badge badge-allocated">VERIFIED ALLOCATED</span>
+                {% elif ex.status == 'FAILED' %}
+                  <span class="badge badge-failed">INFEASIBLE</span>
+                {% else %}
+                  <span class="badge badge-draft">DRAFT</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if ex.status == 'ALLOCATED' %}
+                  <strong>{{ ex.seated_count }}</strong> seated ({{ ex.rooms_allocated }} rooms)
+                {% else %}
+                  <span style="color: var(--text-muted);">Pending Run</span>
+                {% endif %}
+              </td>
+              <td style="text-align: right;">
+                <div style="display: inline-flex; gap: 8px;">
+                  <a href="{{ url_for('allocate_exam', exam_id=ex.id) }}" class="btn btn-primary btn-sm">
+                    {% if ex.status == 'ALLOCATED' %}
+                      View Seating Grid
+                    {% else %}
+                      Run Allocation
+                    {% endif %}
+                  </a>
+                  {% if ex.status == 'ALLOCATED' %}
+                    <a href="{{ url_for('download_master_pdf', exam_id=ex.id) }}" class="btn btn-secondary btn-sm" title="Download Master Seating PDF">
+                      PDF
+                    </a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 32px;">
+              No examinations scheduled. Click <b>"Seed Demo Data"</b> above or create a new examination.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

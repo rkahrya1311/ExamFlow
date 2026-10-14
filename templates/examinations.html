@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Examinations — ExamFlow{% endblock %}
+{% block page_title %}Examination Schedules{% endblock %}
+{% block page_subtitle %}Create exam events, select participating cohorts, and trigger allocation engine{% endblock %}
+
+{% block topbar_actions %}
+  <button type="button" class="btn btn-primary btn-sm" data-modal-target="create-exam-modal">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+    </svg>
+    Create Examination
+  </button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">All Examinations ({{ exams|length }})</h3>
+      <p class="card-subtitle">Manage examination configurations and allocate seating according to college rules</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Exam Details</th>
+          <th>Schedule</th>
+          <th>Participating Departments</th>
+          <th>Status</th>
+          <th>Seating Metrics</th>
+          <th style="text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if exams %}
+          {% for ex in exams %}
+            <tr>
+              <td>
+                <div style="font-weight: 700; font-size: 15px; color: var(--text-primary);">{{ ex.title }}</div>
+                <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;">{{ ex.exam_code }}</div>
+              </td>
+              <td>
+                <div><b>{{ ex.date }}</b></div>
+                <div style="font-size: 12px; color: var(--text-secondary);">{{ ex.session_time }}</div>
+              </td>
+              <td>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                  {% for dept in ex.departments %}
+                    <span class="badge badge-dept">{{ dept }}</span>
+                  {% endfor %}
+                </div>
+              </td>
+              <td>
+                {% if ex.status == 'ALLOCATED' %}
+                  <span class="badge badge-allocated">VERIFIED ALLOCATED</span>
+                {% elif ex.status == 'FAILED' %}
+                  <span class="badge badge-failed">INFEASIBLE</span>
+                {% else %}
+                  <span class="badge badge-draft">DRAFT</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if ex.status == 'ALLOCATED' %}
+                  <strong>{{ ex.seated_count }}</strong> seated ({{ ex.rooms_allocated }} rooms)
+                {% else %}
+                  <span style="color: var(--text-muted);">Unallocated</span>
+                {% endif %}
+              </td>
+              <td style="text-align: right;">
+                <div style="display: inline-flex; gap: 8px;">
+                  <a href="{{ url_for('allocate_exam', exam_id=ex.id) }}" class="btn btn-primary btn-sm">
+                    {% if ex.status == 'ALLOCATED' %}
+                      View Seating
+                    {% else %}
+                      Allocate Seating
+                    {% endif %}
+                  </a>
+                  {% if ex.status == 'ALLOCATED' %}
+                    <a href="{{ url_for('download_master_pdf', exam_id=ex.id) }}" class="btn btn-secondary btn-sm" title="Download Master PDF">
+                      PDF
+                    </a>
+                  {% endif %}
+                  <form action="{{ url_for('delete_examination', exam_id=ex.id) }}" method="POST" onsubmit="return confirm('Delete examination {{ ex.title }}?');" style="display: inline;">
+                    <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">
+              No examinations configured. Click <b>"Create Examination"</b> to set up a new exam event.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create Examination Modal -->
+<div class="modal-overlay" id="create-exam-modal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Create New Examination</h3>
+      <button type="button" class="modal-close" data-modal-close>&times;</button>
+    </div>
+    <form action="{{ url_for('create_examination') }}" method="POST">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="exam-title">Examination Title *</label>
+          <input type="text" name="title" id="exam-title" class="form-control" placeholder="e.g. End Semester Examinations Fall 2026" required>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label" for="exam-code">Exam Code *</label>
+            <input type="text" name="exam_code" id="exam-code" class="form-control" placeholder="e.g. EXAM-2026-F1" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="exam-date">Date *</label>
+            <input type="date" name="date" id="exam-date" class="form-control" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="session-time">Session / Timing *</label>
+          <input type="text" name="session_time" id="session-time" class="form-control" value="09:30 AM - 12:30 PM (Morning)" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Select Participating Departments * (At least 2 required)</label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; max-height: 140px; overflow-y: auto; padding: 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: #f8fafc;">
+            {% for d in all_depts %}
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                <input type="checkbox" name="departments" value="{{ d }}" checked>
+                <span class="badge badge-dept">{{ d }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          {% if all_depts|length < 2 %}
+            <p class="form-help" style="color: var(--danger-text);">Notice: You need at least 2 distinct departments registered in the student directory.</p>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Available Classrooms (All selected by default)</label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; max-height: 140px; overflow-y: auto; padding: 10px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: #f8fafc;">
+            {% for r in all_rooms %}
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                <input type="checkbox" name="classrooms" value="{{ r.id }}" checked>
+                <span><b>{{ r.room_number }}</b> ({{ r.seat_capacity }}s)</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Schedule Examination</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Allocation — {{ exam.title }} — ExamFlow{% endblock %}
+{% block page_title %}{{ exam.title }}{% endblock %}
+{% block page_subtitle %}Examination Code: {{ exam.exam_code }} &nbsp;|&nbsp; Date: {{ exam.date }} &nbsp;|&nbsp; Session: {{ exam.session_time }}{% endblock %}
+
+{% block topbar_actions %}
+  <div style="display: flex; gap: 8px;">
+    {% if exam.status == 'ALLOCATED' %}
+      <a href="{{ url_for('download_master_pdf', exam_id=exam.id) }}" class="btn btn-success btn-sm">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Download Master Seating PDF
+      </a>
+    {% endif %}
+    <form action="{{ url_for('allocate_exam', exam_id=exam.id) }}" method="POST" style="display: inline;">
+      <button type="submit" class="btn btn-primary btn-sm">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        {% if exam.status == 'ALLOCATED' %}Re-Calculate Allocation{% else %}Run Allocation Engine{% endif %}
+      </button>
+    </form>
+  </div>
+{% endblock %}
+
+{% block content %}
+<!-- Allocation Status Banner -->
+{% if exam.status == 'ALLOCATED' %}
+  <div class="alert alert-success" style="display: flex; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24" style="color: var(--success); flex-shrink: 0;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <div>
+        <strong>Allocation Verified and Active!</strong>
+        <div style="font-size: 13px;">{{ exam.allocation_notes }}</div>
+      </div>
+    </div>
+    <span class="badge badge-allocated" style="font-size: 13px; padding: 6px 14px;">VERIFIED BY COLLEGE RULES</span>
+  </div>
+{% elif exam.status == 'FAILED' %}
+  <div class="alert alert-danger">
+    <div style="display: flex; align-items: flex-start; gap: 12px;">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" width="24" height="24" style="color: var(--danger); flex-shrink: 0; margin-top: 2px;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <div>
+        <strong>Allocation Infeasible — College Rule Incompatibility Detected</strong>
+        <div style="font-size: 13px; margin-top: 4px;">{{ exam.allocation_notes }}</div>
+        <div style="font-size: 12px; margin-top: 6px; color: #7f1d1d;">
+          <b>Action Required:</b> Rebalance department student cohorts or assign additional classrooms with sufficient bench capacity.
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<!-- Real-time Mathematical Audit Checklist -->
+<div class="audit-box">
+  <div style="display: flex; align-items: center; justify-content: space-between;">
+    <div>
+      <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary);">Pre-Allocation Mathematical Audit</h3>
+      <p style="font-size: 13px; color: var(--text-secondary);">College rule verification based on participating cohorts and classroom capacities</p>
+    </div>
+    <div>
+      {% if pre_valid %}
+        <span class="badge badge-allocated">Audit Status: PASS</span>
+      {% else %}
+        <span class="badge badge-failed">Audit Status: INCOMPATIBLE</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="rule-checklist">
+    <!-- Check 1: Even Total Count -->
+    <div class="rule-item">
+      {% if total_students > 0 and total_students % 2 == 0 %}
+        <svg class="rule-icon valid" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      {% else %}
+        <svg class="rule-icon invalid" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      {% endif %}
+      <div>
+        <strong>Total Student Parity (Even Count)</strong>
+        <div style="font-size: 12px; color: var(--text-secondary);">
+          Total: {{ total_students }} students ({% if total_students % 2 == 0 %}Even — valid for 2-per-bench pairing{% else %}Odd — cannot pair evenly{% endif %})
+        </div>
+      </div>
+    </div>
+
+    <!-- Check 2: Distinct Departments -->
+    <div class="rule-item">
+      {% if participating_depts|length >= 2 %}
+        <svg class="rule-icon valid" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      {% else %}
+        <svg class="rule-icon invalid" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      {% endif %}
+      <div>
+        <strong>Department Diversity</strong>
+        <div style="font-size: 12px; color: var(--text-secondary);">
+          {{ participating_depts|length }} distinct departments participating (minimum 2 required)
+        </div>
+      </div>
+    </div>
+
+    <!-- Check 3: 50% Threshold -->
+    {% set max_dept_count = 0 %}
+    {% for d, cnt in dept_counts.items() %}
+      {% if cnt > max_dept_count %}{% set max_dept_count = cnt %}{% endif %}
+    {% endfor %}
+    <div class="rule-item">
+      {% if total_students > 0 and max_dept_count <= total_students // 2 %}
+        <svg class="rule-icon valid" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      {% else %}
+        <svg class="rule-icon invalid" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      {% endif %}
+      <div>
+        <strong>Majority Threshold (<= 50%)</strong>
+        <div style="font-size: 12px; color: var(--text-secondary);">
+          Max cohort: {{ max_dept_count }} / {{ total_students }} ({% if total_students > 0 and max_dept_count <= total_students // 2 %}Compliant{% else %}Exceeds 50% limit{% endif %})
+        </div>
+      </div>
+    </div>
+
+    <!-- Check 4: Capacity Sufficiency -->
+    {% set total_bench_cap = 0 %}
+    {% for r in classrooms %}
+      {% set total_bench_cap = total_bench_cap + r.bench_capacity %}
+    {% endfor %}
+    <div class="rule-item">
+      {% if total_bench_cap >= (total_students // 2) %}
+        <svg class="rule-icon valid" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      {% else %}
+        <svg class="rule-icon invalid" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      {% endif %}
+      <div>
+        <strong>Bench Capacity Sufficiency</strong>
+        <div style="font-size: 12px; color: var(--text-secondary);">
+          Need {{ total_students // 2 }} benches, available {{ total_bench_cap }} benches ({{ total_bench_cap * 2 }} seats)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Department Counts Breakdown -->
+  <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+      <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Cohort Counts:</span>
+      {% for d, cnt in dept_counts.items() %}
+        <span class="badge badge-dept" style="font-size: 13px;">{{ d }}: <b>{{ cnt }}</b></span>
+      {% endfor %}
+    </div>
+    <div style="font-size: 13px; color: var(--text-secondary);">
+      Assigned Classrooms: <b>{{ classrooms|length }}</b>
+    </div>
+  </div>
+</div>
+
+<!-- Seating Visualization Grid -->
+{% if exam.status == 'ALLOCATED' and allocated_rooms %}
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">Classroom Seating Grid Visualization</h3>
+        <p class="card-subtitle">Real-time room layout: Teacher's podium at front, bench coordinates, and Left/Right department seats</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <!-- Classroom Tab Navigation -->
+      <div class="room-tabs">
+        {% for r in allocated_rooms %}
+          <button type="button" class="room-tab-btn {% if loop.first %}active{% endif %}" data-room-target="{{ r.classroom_id }}">
+            {{ r.room_number }} ({{ r.dept_left }} & {{ r.dept_right }})
+          </button>
+        {% endfor %}
+      </div>
+
+      <!-- Classroom Visualizer Panes -->
+      {% for r in allocated_rooms %}
+        <div class="room-tab-pane" id="room-pane-{{ r.classroom_id }}" style="display: {% if loop.first %}block{% else %}none{% endif %};">
+          <!-- Room Header Bar -->
+          <div style="display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px 20px; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+              <div>
+                <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Classroom</span>
+                <div style="font-size: 18px; font-weight: 800; color: var(--text-primary);">{{ r.room_number }}</div>
+              </div>
+              <div style="border-left: 1px solid var(--border-color); padding-left: 20px;">
+                <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Left Department</span>
+                <div><span class="badge badge-dept-left" style="font-size: 14px; padding: 4px 10px;">{{ r.dept_left }}</span></div>
+              </div>
+              <div style="border-left: 1px solid var(--border-color); padding-left: 20px;">
+                <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Right Department</span>
+                <div><span class="badge badge-dept-right" style="font-size: 14px; padding: 4px 10px;">{{ r.dept_right }}</span></div>
+              </div>
+              <div style="border-left: 1px solid var(--border-color); padding-left: 20px;">
+                <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Benches</span>
+                <div style="font-size: 15px; font-weight: 700; color: var(--text-primary);">
+                  {{ r.benches_used }} / {{ r.total_benches }} occupied
+                </div>
+              </div>
+              <div style="border-left: 1px solid var(--border-color); padding-left: 20px;">
+                <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700;">Students Seated</span>
+                <div style="font-size: 15px; font-weight: 700; color: #047857;">
+                  {{ r.seat_count }} ({{ r.students_left_count }} Left + {{ r.students_right_count }} Right)
+                </div>
+              </div>
+            </div>
+
+            <!-- Door Notice PDF download -->
+            <a href="{{ url_for('download_room_door_notice', exam_id=exam.id, classroom_id=r.classroom_id) }}" class="btn btn-secondary btn-sm" title="Printable Room Door Chart PDF">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Door Notice PDF
+            </a>
+          </div>
+
+          <!-- Physical Seating Layout Canvas -->
+          <div class="classroom-canvas">
+            <div class="podium-indicator">
+              BLACKBOARD / INVIGILATOR PODIUM (FRONT)
+            </div>
+
+            <div class="grid-rows">
+              {% for row in r.grid %}
+                <div class="grid-row-container">
+                  {% for bench in row %}
+                    {% if bench.occupied %}
+                      <div class="bench-card">
+                        <div class="bench-header">
+                          <span class="bench-number">Bench {{ bench.bench_num }}</span>
+                          <span class="bench-coords">R{{ bench.row }}-C{{ bench.col }}</span>
+                        </div>
+                        <div class="seats-dual">
+                          <!-- Left Seat -->
+                          <div class="seat-slot left-seat">
+                            <span class="seat-pos-label">LEFT: {{ r.dept_left }}</span>
+                            <span class="student-roll">{{ bench.left.roll_number }}</span>
+                            <span class="student-name" title="{{ bench.left.student_name }}">{{ bench.left.student_name }}</span>
+                          </div>
+                          <!-- Right Seat -->
+                          <div class="seat-slot right-seat">
+                            <span class="seat-pos-label">RIGHT: {{ r.dept_right }}</span>
+                            <span class="student-roll">{{ bench.right.roll_number }}</span>
+                            <span class="student-name" title="{{ bench.right.student_name }}">{{ bench.right.student_name }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    {% else %}
+                      <!-- Empty Bench (Permitted by college rules) -->
+                      <div class="bench-card empty-bench">
+                        <div class="bench-header">
+                          <span class="bench-number">Bench {{ bench.bench_num }}</span>
+                          <span class="bench-coords">R{{ bench.row }}-C{{ bench.col }}</span>
+                        </div>
+                        <div class="empty-bench-content">
+                          [ Empty Bench ]
+                        </div>
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

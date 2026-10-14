@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Students Directory — ExamFlow{% endblock %}
+{% block page_title %}Student Directory & CSV Ingestion{% endblock %}
+{% block page_subtitle %}Manage student cohorts, upload department rosters, and download test templates{% endblock %}
+
+{% block topbar_actions %}
+  <div style="display: flex; gap: 8px;">
+    <a href="{{ url_for('download_sample_csv', sample_type='aids_b_cse_b') }}" class="btn btn-secondary btn-sm" title="Download AI&DS-B and CSE-B sample CSV (30 each for 6x5 hall)">
+      AI&DS-B & CSE-B CSV
+    </a>
+    <a href="{{ url_for('download_sample_csv', sample_type='valid') }}" class="btn btn-secondary btn-sm" title="Download balanced valid CSV (CSE: 40, ECE: 30, MECH: 10)">
+      Valid Sample CSV
+    </a>
+    <a href="{{ url_for('download_sample_csv', sample_type='incompatible') }}" class="btn btn-secondary btn-sm" title="Download incompatible CSV (>50% CSE)">
+      Incompatible Sample CSV
+    </a>
+    <button type="button" class="btn btn-primary btn-sm" data-modal-target="upload-modal">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      </svg>
+      Upload Student CSV
+    </button>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <h3 class="card-title">Enrolled Students ({{ students|length }})</h3>
+      <!-- Department Filter Pills -->
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        <a href="{{ url_for('students_list') }}" class="btn btn-sm {% if not selected_dept %}btn-primary{% else %}btn-secondary{% endif %}">
+          All
+        </a>
+        {% for d in all_depts %}
+          <a href="{{ url_for('students_list', department=d) }}" class="btn btn-sm {% if selected_dept == d %}btn-primary{% else %}btn-secondary{% endif %}">
+            {{ d }}
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% if students %}
+      <form action="{{ url_for('clear_students') }}" method="POST" onsubmit="return confirm('Are you sure you want to delete all student records?');">
+        <button type="submit" class="btn btn-danger btn-sm">Clear All Students</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Roll Number</th>
+          <th>Student Name</th>
+          <th>Department</th>
+          <th>Academic Year</th>
+          <th>Email Address</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if students %}
+          {% for s in students %}
+            <tr>
+              <td><span style="font-family: monospace; font-weight: 700;">{{ s.roll_number }}</span></td>
+              <td><b>{{ s.name }}</b></td>
+              <td><span class="badge badge-dept">{{ s.department }}</span></td>
+              <td>Year {{ s.year }}</td>
+              <td style="color: var(--text-secondary);">{{ s.email or '—' }}</td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 40px;">
+              No students found for the selected filter. Click <b>"Upload Student CSV"</b> to upload student rosters.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal-overlay" id="upload-modal">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3>Upload Student Roster CSV</h3>
+      <button type="button" class="modal-close" data-modal-close>&times;</button>
+    </div>
+    <form action="{{ url_for('upload_students_csv') }}" method="POST" enctype="multipart/form-data">
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+          Upload a standard CSV file with headers: <code>roll_number,name,department,year,email</code>.
+          Existing roll numbers will be updated automatically.
+        </p>
+
+        <div class="file-dropzone" onclick="document.getElementById('csv-file-input').click();">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" width="36" height="36" style="margin: 0 auto 10px; color: var(--brand-primary);">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+          <div id="dropzone-text" style="font-weight: 600; font-size: 14px; color: var(--text-primary);">
+            Click or drag & drop CSV file here
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Supports UTF-8 encoded .csv files</div>
+          <input type="file" name="csv_file" id="csv-file-input" accept=".csv" required style="display: none;">
+        </div>
+
+        <div style="margin-top: 18px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; font-size: 12px;">
+          <strong>CSV Requirements:</strong>
+          <ul style="margin-left: 18px; margin-top: 4px; color: var(--text-secondary);">
+            <li>Required columns: <code>roll_number</code>, <code>name</code>, <code>department</code></li>
+            <li>Optional columns: <code>year</code>, <code>email</code></li>
+            <li>Departments should match codes like <code>CSE</code>, <code>ECE</code>, <code>MECH</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-modal-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Process & Ingest CSV</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
